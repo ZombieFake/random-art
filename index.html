@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Random Art</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Caladea:ital@0;1&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="index.css">
+    </link>
+</head>
+
+<body>
+    <img id="mainImage" src="" crossorigin="anonymous">
+    <div id="textBox">
+        <div id="textGroup">
+            <span class="textField" id="titleText"></span>
+            <span class="textField" id="authorText"></span>
+        </div>
+    </div>
+    <p id="statusText"></p>
+</body>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/color-thief/2.4.0/color-thief.umd.js"></script>
+<script>
+    const colorThief = new ColorThief();
+    let totalArtworks = 0;
+    let imageEl = document.getElementById("mainImage");
+    let statusField = document.getElementById("statusText");
+
+    imageEl.addEventListener('load', function () {
+        let color = colorThief.getColor(imageEl);
+        imageEl.setAttribute("style", `box-shadow: 0px 0px 300px 300px rgba(${color[0]}, ${color[1]}, ${color[2]}, 0.5);`)
+    });
+
+    function init() {
+        // call API without params to get total count
+        const options = {
+            method: 'GET'
+        };
+
+        fetch('https://api.artic.edu/api/v1/artworks')
+            .then((response) => response.json())
+            .then((response) => {
+                totalArtworks = response.pagination.total;
+                getRandomImage();
+            })
+            .catch(err => {
+                console.error(err);
+                statusField.innerHTML = "Error initializing, retrying...";
+                setTimeout(() => {
+                    init();
+                }, 5000);
+            });
+
+    }
+
+    function getRandomImage() {
+        let min = 1;
+        let max = totalArtworks;
+        let randomIndex = Math.floor(Math.random() * (max - min + 1) + min);
+
+        statusField.innerHTML = "Searching image...";
+        fetch(
+            'https://api.artic.edu/api/v1/artworks?' + new URLSearchParams({
+                limit: 1,
+                page: randomIndex,
+                fields: "id,title,artist_title,image_id,term_titles"
+            })
+        )
+            .then((response) => {
+                if (!response.ok) {
+                    throw new Error("Error retrieving artwork info");
+                }
+                return response;
+            })
+            .then((response) => response.json())
+            .then((response) => {
+                if (response.data[0].term_titles.includes("painting") || response.data[0].term_titles.includes("print")) {
+                    let url = `${response.config.iiif_url}/${response.data[0].image_id}/full/${screen.width},/0/default.jpg`;
+                    fetch(url)
+                        .then((response) => {
+                            if (!response.ok) {
+                                throw new Error("Error retrieving artwork file");
+                            }
+                            return response;
+                        })
+                        .then((imgResp) => imgResp.blob())
+                        .then((imgResp) => {
+                            imageEl.src = URL.createObjectURL(imgResp);
+                            document.getElementById("titleText").innerHTML = response.data[0].title
+                            document.getElementById("authorText").innerHTML = response.data[0].artist_title
+                            statusField.innerHTML = "";
+                            setTimeout(() => {
+                                getRandomImage();
+                            }, 300000);
+                        })
+                        .catch((err) => {
+                            console.error(err);
+                            statusField.innerHTML = "Error, retrying...";
+                            setTimeout(() => {
+                                getRandomImage();
+                            }, 5000);
+                        });
+                } else {
+                    statusField.innerHTML = "Searching another...";
+                    setTimeout(() => {
+                        getRandomImage();
+                    }, 1000);
+                }
+            })
+            .catch((err) => {
+                console.error(err);
+                statusField.innerHTML = "Error, retrying...";
+                setTimeout(() => {
+                    getRandomImage();
+                }, 5000);
+            });
+    }
+
+    init();
+</script>
+
+</html>
